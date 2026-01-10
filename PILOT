@@ -1,0 +1,166 @@
+def menu():
+    menu_text = """
+    \n================ MENU ================
+    [d]\tDepositar
+    [s]\tSacar
+    [e]\tExtrato
+    [p]\tPIX (Transferência)
+    [nc]\tNova Conta
+    [lc]\tListar Contas
+    [nu]\tNovo Usuário
+    [q]\tSair
+    => """
+    return input(textwrap.dedent(menu_text)).lower().strip()
+
+# --- FUNÇÕES DE OPERAÇÃO ---
+
+def depositar(saldo, valor, extrato, /):
+    if valor > 0:
+        saldo += valor
+        extrato += f"Depósito:\tR$ {valor:.2f}\n"
+        print("\n=== Depósito realizado com sucesso! ===")
+    else:
+        print("\n@@@ Operação falhou! O valor informado é inválido. @@@")
+    return saldo, extrato
+
+def sacar(*, saldo, valor, extrato, limite, numero_saques, limite_saques):
+    if valor > saldo:
+        print("\n@@@ Erro: Saldo insuficiente. @@@")
+    elif valor > limite:
+        print("\n@@@ Erro: Valor excede o limite por saque. @@@")
+    elif numero_saques >= limite_saques:
+        print("\n@@@ Erro: Limite de saques diários atingido. @@@")
+    elif valor > 0:
+        saldo -= valor
+        extrato += f"Saque:\t\tR$ {valor:.2f}\n"
+        numero_saques += 1
+        print("\n=== Saque realizado com sucesso! ===")
+    else:
+        print("\n@@@ Erro: Valor inválido. @@@")
+    return saldo, extrato, numero_saques
+
+def pix(*, contas, conta_origem, valor, extrato_origem):
+    """Nova função: Realiza transferência entre contas"""
+    if valor <= 0:
+        print("\n@@@ Erro: Valor inválido para PIX. @@@")
+        return 0, extrato_origem
+
+    cpf_destino = input("Informe o CPF do destinatário: ")
+    conta_destino = None
+    
+    # Busca a primeira conta vinculada ao CPF de destino
+    for c in contas:
+        if c["usuario"]["cpf"] == cpf_destino:
+            conta_destino = c
+            break
+
+    if not conta_destino:
+        print("\n@@@ Erro: Destinatário não encontrado. @@@")
+        return 0, extrato_origem
+    
+    if conta_destino == conta_origem:
+        print("\n@@@ Erro: Você não pode fazer um PIX para a mesma conta. @@@")
+        return 0, extrato_origem
+
+    # Realiza a transferência
+    # Nota: Em um sistema real, o saldo estaria dentro do objeto 'conta'
+    # Aqui, como o saldo é uma variável local da main(), simulamos o retorno
+    extrato_origem += f"PIX Enviado: R$ {valor:.2f} para {conta_destino['usuario']['nome']}\n"
+    print(f"\n=== PIX de R$ {valor:.2f} enviado para {conta_destino['usuario']['nome']}! ===")
+    return valor, extrato_origem
+
+def exibir_extrato(saldo, /, *, extrato):
+    print("\n================ EXTRATO ================")
+    print("Não foram realizadas movimentações." if not extrato else extrato)
+    print(f"\nSaldo:\t\tR$ {saldo:.2f}")
+    print("==========================================")
+
+# --- FUNÇÕES DE GESTÃO ---
+
+def filtrar_usuario(cpf, usuarios):
+    usuarios_filtrados = [u for u in usuarios if u["cpf"] == cpf]
+    return usuarios_filtrados[0] if usuarios_filtrados else None
+
+def criar_usuario(usuarios):
+    cpf = input("Informe o CPF (somente números): ")
+    if filtrar_usuario(cpf, usuarios):
+        print("\n@@@ Erro: CPF já cadastrado. @@@")
+        return
+
+    nome = input("Nome completo: ")
+    data_nasc = input("Data de nascimento (dd-mm-aaaa): ")
+    endereco = input("Endereço (rua, num - bairro - cidade/UF): ")
+
+    usuarios.append({"nome": nome, "cpf": cpf, "data_nascimento": data_nasc, "endereco": endereco})
+    print("=== Usuário cadastrado! ===")
+
+def criar_conta(agencia, numero_conta, usuarios):
+    cpf = input("CPF do titular: ")
+    usuario = filtrar_usuario(cpf, usuarios)
+    if usuario:
+        print("\n=== Conta criada com sucesso! ===")
+        return {"agencia": agencia, "numero_conta": numero_conta, "usuario": usuario}
+    print("\n@@@ Erro: Usuário não encontrado. @@@")
+
+# --- EXECUÇÃO ---
+
+def main():
+    LIMITE_SAQUES = 3
+    AGENCIA = "0001"
+    
+    saldo = 1000  # Começando com algum saldo para testar o PIX
+    limite = 500
+    extrato = ""
+    numero_saques = 0
+    usuarios = []
+    contas = []
+
+    while True:
+        opcao = menu()
+
+        try:
+            if opcao == "d":
+                valor = float(input("Valor do depósito: "))
+                saldo, extrato = depositar(saldo, valor, extrato)
+
+            elif opcao == "s":
+                valor = float(input("Valor do saque: "))
+                saldo, extrato, numero_saques = sacar(
+                    saldo=saldo, valor=valor, extrato=extrato, 
+                    limite=limite, numero_saques=numero_saques, limite_saques=LIMITE_SAQUES
+                )
+
+            elif opcao == "p":
+                if not contas:
+                    print("\n@@@ Erro: Você precisa ter uma conta ativa para fazer PIX. @@@")
+                    continue
+                
+                valor_pix = float(input("Valor do PIX: "))
+                if valor_pix > saldo:
+                    print("\n@@@ Erro: Saldo insuficiente. @@@")
+                else:
+                    # Usamos a primeira conta da lista como 'origem' para este exemplo
+                    debito, extrato = pix(contas=contas, conta_origem=contas[0], valor=valor_pix, extrato_origem=extrato)
+                    saldo -= debito
+
+            elif opcao == "e":
+                exibir_extrato(saldo, extrato=extrato)
+
+            elif opcao == "nu":
+                criar_usuario(usuarios)
+
+            elif opcao == "nc":
+                num_conta = len(contas) + 1
+                conta = criar_conta(AGENCIA, num_conta, usuarios)
+                if conta: contas.append(conta)
+
+            elif opcao == "lc":
+                for c in contas:
+                    print(f"Ag: {c['agencia']} | C/C: {c['numero_conta']} | Titular: {c['usuario']['nome']}")
+
+            elif opcao == "q":
+                break
+        except ValueError:
+            print("\n@@@ Erro: Por favor, insira apenas números para valores monetários. @@@")
+
+main()
